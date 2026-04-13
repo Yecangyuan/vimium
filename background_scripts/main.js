@@ -21,11 +21,6 @@ import {
   TabCompleter,
 } from "./completion/completers.js";
 
-// NOTE(philc): This file has many superfluous return statements in its functions, as a result of
-// converting from coffeescript to es6. Many can be removed, but I didn't take the time to
-// diligently track down precisely which return statements could be removed when I was doing the
-// conversion.
-
 import * as TabOperations from "./tab_operations.js";
 
 // Allow Vimium's content scripts to access chrome.storage.session. Otherwise,
@@ -183,13 +178,13 @@ function moveTab({ count, tab, registryEntry }) {
   if (registryEntry.command === "moveTabLeft") {
     count = -count;
   }
-  return chrome.tabs.query(visibleTabsQueryArgs, function (tabs) {
+  chrome.tabs.query(visibleTabsQueryArgs, function (tabs) {
     const pinnedCount = (tabs.filter((tab) => tab.pinned)).length;
     const minIndex = tab.pinned ? 0 : pinnedCount;
     const maxIndex = (tab.pinned ? pinnedCount : tabs.length) - 1;
     // The tabs array index of the new position.
     const moveIndex = Math.max(minIndex, Math.min(maxIndex, getTabIndex(tab, tabs) + count));
-    return chrome.tabs.move(tab.id, {
+    chrome.tabs.move(tab.id, {
       index: tabs[moveIndex].index,
     });
   });
@@ -197,11 +192,9 @@ function moveTab({ count, tab, registryEntry }) {
 
 function createRepeatCommand(command) {
   return async function (request) {
-    let i = request.count - 1;
     const r = Object.assign({}, request);
     delete r.count;
-    while (i >= 0) {
-      i--;
+    for (let i = 0; i < request.count; i++) {
       await command(r);
     }
   };
@@ -299,29 +292,27 @@ const BackgroundCommands = {
     request.tabId = tab.id;
   }),
 
-  moveTabToNewWindow({ count, tab }) {
-    // TODO(philc): Switch to the promise API of chrome.tabs.query.
-    chrome.tabs.query(visibleTabsQueryArgs, function (tabs) {
-      const activeTabIndex = getTabIndex(tab, tabs);
-      const startTabIndex = Math.max(0, Math.min(activeTabIndex, tabs.length - count));
-      [tab, ...tabs] = tabs.slice(startTabIndex, startTabIndex + count);
-      chrome.windows.create({ tabId: tab.id, incognito: tab.incognito }, function (window) {
-        chrome.tabs.move(tabs.map((t) => t.id), { windowId: window.id, index: -1 });
-      });
-    });
+  async moveTabToNewWindow({ count, tab }) {
+    const tabs = await chrome.tabs.query(visibleTabsQueryArgs);
+    const activeTabIndex = getTabIndex(tab, tabs);
+    const startTabIndex = Math.max(0, Math.min(activeTabIndex, tabs.length - count));
+    let tabsToMove;
+    [tab, ...tabsToMove] = tabs.slice(startTabIndex, startTabIndex + count);
+    const window = await chrome.windows.create({ tabId: tab.id, incognito: tab.incognito });
+    chrome.tabs.move(tabsToMove.map((t) => t.id), { windowId: window.id, index: -1 });
   },
 
   nextTab(request) {
-    return selectTab("next", request);
+    selectTab("next", request);
   },
   previousTab(request) {
-    return selectTab("previous", request);
+    selectTab("previous", request);
   },
   firstTab(request) {
-    return selectTab("first", request);
+    selectTab("first", request);
   },
   lastTab(request) {
-    return selectTab("last", request);
+    selectTab("last", request);
   },
   async removeTab({ count, tab }) {
     await forCountTabs(count, tab, (tab) => {
@@ -777,15 +768,15 @@ chrome.tabs.onRemoved.addListener(function (tabId) {
   }
   chrome.storage.session.get("findModeRawQueryListIncognito", function (items) {
     if (items.findModeRawQueryListIncognito) {
-      return chrome.windows != null
-        ? chrome.windows.getAll(null, function (windows) {
+      if (chrome.windows != null) {
+        chrome.windows.getAll(null, function (windows) {
           for (const window of windows) {
             if (window.incognito) return;
           }
           // There are no remaining incognito-mode tabs, and findModeRawQueryListIncognito is set.
-          return chrome.storage.session.remove("findModeRawQueryListIncognito");
-        })
-        : undefined;
+          chrome.storage.session.remove("findModeRawQueryListIncognito");
+        });
+      }
     }
   });
 });

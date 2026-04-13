@@ -111,22 +111,26 @@ export class Suggestion {
     return this.html;
   }
 
-  // Use neat trick to snatch a domain (http://stackoverflow.com/a/8498668).
   getUrlRoot(url) {
-    const a = document.createElement("a");
-    a.href = url;
-    return a.protocol + "//" + a.hostname;
+    try {
+      const u = new URL(url);
+      return u.protocol + "//" + u.hostname;
+    } catch {
+      return url;
+    }
   }
 
   getHostname(url) {
-    const a = document.createElement("a");
-    a.href = url;
-    return a.hostname;
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return "";
+    }
   }
 
   stripTrailingSlash(url) {
     if (url[url.length - 1] === "/") {
-      url = url.substring(url, url.length - 1);
+      url = url.substring(0, url.length - 1);
     }
     return url;
   }

@@ -116,13 +116,17 @@ const Marks = {
                 : localStorage[this.getLocationKey(keyChar)];
               if (markString != null) {
                 this.setPreviousPosition();
-                const position = JSON.parse(markString);
-                if (position.hash && (position.scrollX === 0) && (position.scrollY === 0)) {
-                  globalThis.location.hash = position.hash;
-                } else {
-                  globalThis.scrollTo(position.scrollX, position.scrollY);
+                try {
+                  const position = JSON.parse(markString);
+                  if (position.hash && (position.scrollX === 0) && (position.scrollY === 0)) {
+                    globalThis.location.hash = position.hash;
+                  } else {
+                    globalThis.scrollTo(position.scrollX, position.scrollY);
+                  }
+                  this.showMessage("Jumped to local mark", keyChar);
+                } catch {
+                  this.showMessage("Invalid local mark data", keyChar);
                 }
-                this.showMessage("Jumped to local mark", keyChar);
               } else {
                 this.showMessage("Local mark not set", keyChar);
               }

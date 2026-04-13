@@ -265,7 +265,7 @@ const HintCoordinator = {
     }
     this.linkHintsMode = new LinkHintsMode(hintDescriptors, availableModes[modeIndex]);
     // Replay keydown events which we missed (but for filtered hints only).
-    if (Settings.get("filterLinkHints" && this.cacheAllKeydownEvents)) {
+    if (Settings.get("filterLinkHints") && this.cacheAllKeydownEvents) {
       this.cacheAllKeydownEvents.replayKeydownEvents();
     }
     this.cacheAllKeydownEvents = null;
@@ -810,7 +810,7 @@ class AlphabetHints {
 
   fillInMarkers(hintMarkers) {
     const hintStrings = this.hintStrings(hintMarkers.length);
-    if (hintMarkers.length != hintStrings.length) {
+    if (hintMarkers.length !== hintStrings.length) {
       // This can only happen if the user's linkHintCharacters setting is empty.
       console.warn("Unable to generate link hint strings.");
     } else {
@@ -1086,8 +1086,8 @@ const LocalHints = {
       let mapName = element.getAttribute("usemap");
       if (mapName) {
         const imgClientRects = element.getClientRects();
-        mapName = mapName.replace(/^#/, "").replace('"', '\\"');
-        const map = document.querySelector(`map[name=\"${mapName}\"]`);
+        mapName = mapName.replace(/^#/, "");
+        const map = document.querySelector(`map[name="${CSS.escape(mapName)}"]`);
         if (map && (imgClientRects.length > 0)) {
           isClickable = true;
           const areas = map.getElementsByTagName("area");

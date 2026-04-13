@@ -31,6 +31,10 @@ export async function create(req, sender) {
     // The front-end frame hasn't provided the scroll position (because it's not the top frame
     // within its tab). We need to ask the top frame what its scroll position is.
     chrome.tabs.sendMessage(sender.tab.id, { handler: "getScrollPosition" }, (response) => {
+      if (chrome.runtime.lastError || response == null) {
+        saveMark(markInfo);
+        return;
+      }
       saveMark(Object.assign(markInfo, { scrollX: response.scrollX, scrollY: response.scrollY }));
     });
   }
@@ -51,6 +55,10 @@ export async function goto(req) {
   const key = getLocationKey(req.markName);
   const items = await chrome.storage.local.get(key);
   const markInfo = items[key];
+  if (markInfo == null) {
+    HUD?.show?.(`Global mark not set '${req.markName}'.`, 1000);
+    return;
+  }
   if (markInfo.vimiumSecret !== vimiumSecret) {
     // This is a different Vimium instantiation, so markInfo.tabId is definitely out of date.
     Utils.debugLog("marks: vimiumSecret is incorrect.");
@@ -94,18 +102,16 @@ async function focusOrLaunch(markInfo, req) {
   if (tabs.length > 0) {
     // There is at least one matching tab. Pick one and go to it.
     const tab = await pickTab(tabs);
-    gotoPositionInTab(Object.assign(markInfo, { tabId: tab.id }));
+    await gotoPositionInTab(Object.assign(markInfo, { tabId: tab.id }));
   } else {
     // There is no existing matching tab. We'll have to create one.
-    TabOperations.openUrlInNewTab(
+    const tab = await TabOperations.openUrlInNewTab(
       Object.assign(req, { url: getBaseUrl(markInfo.url) }),
-      (tab) => {
-        // Note. tabLoadedHandlers is defined in "main.js". The handler below will be called when
-        // the tab is loaded, its DOM is ready and it registers with the background page.
-        return tabLoadedHandlers[tab.id] = () =>
-          gotoPositionInTab(Object.assign(markInfo, { tabId: tab.id }));
-      },
     );
+    // Note. tabLoadedHandlers is defined in "main.js". The handler below will be called when
+    // the tab is loaded, its DOM is ready and it registers with the background page.
+    tabLoadedHandlers[tab.id] = () =>
+      gotoPositionInTab(Object.assign(markInfo, { tabId: tab.id }));
   }
 }
 

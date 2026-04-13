@@ -111,7 +111,7 @@ export async function openUrlInNewWindow(request) {
     winConfig.active = request.active;
   }
   // Firefox does not support "about:newtab" in chrome.tabs.create, so omit it.
-  if (tabConfig["url"] === UrlUtils.chromeNewTabUrl) {
+  if (winConfig["url"] === UrlUtils.chromeNewTabUrl) {
     delete winConfig["url"];
   }
   await chrome.windows.create(winConfig);

@@ -180,8 +180,7 @@ class Movement {
 
   setSelectionRange(range) {
     this.selection.removeAllRanges();
-    // TODO(philc): Is this return needed?
-    return this.selection.addRange(range);
+    this.selection.addRange(range);
   }
 
   // For "aw", "as". We don't do "ap" (for paragraphs), because Chrome paragraph movements are
