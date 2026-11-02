@@ -27,6 +27,7 @@ const HUD = {
       unfocusIfFocused: this.unfocusIfFocused,
       pasteResponse: this.pasteResponse,
       showClipboardUnavailableMessage: this.showClipboardUnavailableMessage,
+      showClipboardWriteFailedMessage: this.showClipboardWriteFailedMessage,
     };
     const handler = handlers[data.name];
     if (handler) {
@@ -213,6 +214,14 @@ const HUD = {
     await this.init();
     // Since the message is long and surprising, show it for longer to allow more time to reading.
     this.show("Clipboard actions available only on HTTPS sites", 4000);
+  },
+
+  // Navigator.clipboard.writeText() can fail even on HTTPS sites, e.g. if the document isn't
+  // focused. Report it, so that a failed copy isn't mistaken for a successful one.
+  async showClipboardWriteFailedMessage() {
+    await DomUtils.documentComplete();
+    await this.init();
+    this.show("Failed to copy to the clipboard", 4000);
   },
 };
 

@@ -85,6 +85,27 @@ function ensureClipboardIsAvailable() {
   return true;
 }
 
+// A fallback for when navigator.clipboard.writeText() is rejected, e.g. because the document is not
+// focused.
+function copyViaExecCommand(text) {
+  let succeeded = false;
+  const el = document.createElement("textarea");
+  el.value = text;
+  // The element has to be rendered (though not visible) for select() and execCommand to work.
+  el.style.position = "fixed";
+  el.style.top = "0";
+  el.style.opacity = "0";
+  document.body.appendChild(el);
+  try {
+    el.select();
+    succeeded = document.execCommand("copy");
+  } catch (error) {
+    succeeded = false;
+  }
+  el.remove();
+  return succeeded;
+}
+
 // Exported for unit tests.
 export const handlers = {
   show(data) {
@@ -182,7 +203,18 @@ export const handlers = {
 
       // Replace nbsp; characters with space. See #2217.
       const value = message.data.replace(/\xa0/g, " ");
-      await navigator.clipboard.writeText(value);
+      // writeText() can be rejected, e.g. "Document is not focused", or a permissions-policy
+      // violation. Whoever asked us to copy has already told the user that it succeeded, so fall
+      // back to execCommand, and report it if that fails too.
+      try {
+        await navigator.clipboard.writeText(value);
+      } catch (error) {
+        console.error("Vimium: clipboard write failed.", error);
+        if (!copyViaExecCommand(value)) {
+          console.error("Vimium: execCommand fallback also failed.");
+          UIComponentMessenger.postMessage({ name: "showClipboardWriteFailedMessage" });
+        }
+      }
 
       if (focusedElement != null) focusedElement.focus();
       globalThis.parent.focus();
