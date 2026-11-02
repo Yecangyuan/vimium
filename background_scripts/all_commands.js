@@ -147,6 +147,13 @@ const allCommands = [
   },
 
   {
+    name: "enterCaretMode",
+    desc: "Enter caret mode",
+    group: "navigation",
+    noRepeat: true,
+  },
+
+  {
     name: "enterVisualMode",
     desc: "Enter visual mode",
     group: "navigation",

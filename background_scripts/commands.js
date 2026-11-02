@@ -433,7 +433,7 @@ const defaultKeyMappings = {
   "gu": "goUp",
   "gU": "goToRoot",
   "i": "enterInsertMode",
-  "v": "enterVisualMode",
+  "v": "enterCaretMode",
   "V": "enterVisualLineMode",
 
   // Link hints

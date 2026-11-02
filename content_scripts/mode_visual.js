@@ -585,30 +585,98 @@ class CaretMode extends VisualMode {
 
   // When visual mode starts and there's no existing selection, we launch CaretMode and try to
   // establish a selection. As a heuristic, we pick the first non-whitespace character of the first
-  // visible text node which seems to be big enough to be interesting.
+  // text node which seems to be big enough to be interesting. We prefer text which is rendered
+  // within the current viewport, so that the caret starts where the user is actually looking.
   // TODO(smblott). It might be better to do something similar to Clearly or Readability; that is,
   // try to find the start of the page's main textual content.
   establishInitialSelectionAnchor() {
+    // First pass: only accept text which is visible in the current viewport. Second pass: fall back
+    // to the document-order heuristic, so that we still find something on pages where nothing
+    // suitable is on screen.
+    for (const requireVisible of [true, false]) {
+      const range = this.findInitialAnchorRange(requireVisible);
+      if (range) {
+        this.movement.setSelectionRange(range);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Returns a collapsed range at the start of a text node which looks like it's worth selecting, or
+  // null if there is none. If requireVisible is true, then only text which is rendered within the
+  // current viewport is considered.
+  findInitialAnchorRange(requireVisible) {
     let node;
     const nodes = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     while ((node = nodes.nextNode())) {
       // Don't choose short text nodes; they're likely to be part of a banner.
-      if ((node.nodeType === 3) && (50 <= node.data.trim().length)) {
-        const element = node.parentElement;
-        if (DomUtils.getVisibleClientRect(element) && !DomUtils.isEditable(element)) {
-          // Start at the offset of the first non-whitespace character.
-          const offset = node.data.length - node.data.replace(/^\s+/, "").length;
-          const range = document.createRange();
-          range.setStart(node, offset);
-          range.setEnd(node, offset);
-          this.movement.setSelectionRange(range);
-          return true;
-        }
+      if ((node.nodeType !== 3) || !(50 <= node.data.trim().length)) continue;
+      const element = node.parentElement;
+      if (!element || DomUtils.isEditable(element)) continue;
+
+      // The offset of the first non-whitespace character.
+      const offset = node.data.length - node.data.replace(/^\s+/, "").length;
+
+      if (requireVisible) {
+        // A long text node can begin above the viewport and extend into it, so anchor at the first
+        // of its characters which is actually on screen.
+        const visibleOffset = this.firstVisibleOffset(node, offset);
+        if (visibleOffset == null) continue;
+        return this.collapsedRangeAt(node, visibleOffset);
+      }
+
+      // NOTE(smblott). This tests the parent element, which is often a container which extends into
+      // the viewport even when this particular text has scrolled out of view. That's why we only use
+      // it as a fallback.
+      if (DomUtils.getVisibleClientRect(element)) return this.collapsedRangeAt(node, offset);
+    }
+    return null;
+  }
+
+  // Returns the offset of the first character of node, at or after startOffset, which is rendered
+  // within the current viewport; or null if there is none. Visibility is monotonic in the offset, so
+  // we binary search; text nodes can be very long.
+  firstVisibleOffset(node, startOffset) {
+    const lastOffset = node.data.length - 1;
+    if (this.isOffsetVisible(node, startOffset)) return startOffset;
+    // If the final character is above the viewport, then so is every character before it.
+    if (!this.isOffsetVisible(node, lastOffset)) return null;
+    let lo = startOffset;
+    let hi = lastOffset;
+    while (lo + 1 < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (this.isOffsetVisible(node, mid)) {
+        hi = mid;
+      } else {
+        lo = mid;
       }
     }
-    return false;
+    return this.isOffsetVisible(node, hi) ? hi : null;
+  }
+
+  // Returns true if the character at (node, offset) is rendered within the current viewport. Unlike
+  // DomUtils.getVisibleClientRect(), this tests the character itself, and not its (possibly much
+  // larger) parent element.
+  isOffsetVisible(node, offset) {
+    const range = document.createRange();
+    range.setStart(node, offset);
+    range.setEnd(node, offset + 1);
+    const rect = range.getBoundingClientRect();
+    // E.g. in the DOM tests, where getBoundingClientRect() is unavailable.
+    if (!rect) return true;
+    return (rect.bottom > 0) && (rect.top < globalThis.innerHeight) &&
+      (rect.right > 0) && (rect.left < globalThis.innerWidth);
+  }
+
+  collapsedRangeAt(node, offset) {
+    const range = document.createRange();
+    range.setStart(node, offset);
+    range.setEnd(node, offset);
+    return range;
   }
 }
 
 globalThis.VisualMode = VisualMode;
 globalThis.VisualLineMode = VisualLineMode;
+globalThis.CaretMode = CaretMode;

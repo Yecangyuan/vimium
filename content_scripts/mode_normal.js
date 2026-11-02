@@ -206,6 +206,13 @@ const NormalModeCommands = {
     return mode;
   },
 
+  // "v" launches caret mode, and a second "v" then launches visual mode. Caret mode is the more
+  // useful entry point: it lets the user position the caret first, and only then decide how much to
+  // select.
+  enterCaretMode() {
+    return new CaretMode().init();
+  },
+
   enterVisualLineMode() {
     const mode = new VisualLineMode();
     mode.init({ userLaunchedMode: true });
