@@ -590,48 +590,56 @@ class CaretMode extends VisualMode {
   // TODO(smblott). It might be better to do something similar to Clearly or Readability; that is,
   // try to find the start of the page's main textual content.
   establishInitialSelectionAnchor() {
-    // First pass: only accept text which is visible in the current viewport. Second pass: fall back
-    // to the document-order heuristic, so that we still find something on pages where nothing
-    // suitable is on screen.
-    for (const requireVisible of [true, false]) {
-      const range = this.findInitialAnchorRange(requireVisible);
-      if (range) {
-        this.movement.setSelectionRange(range);
-        return true;
-      }
-    }
-    return false;
-  }
+    // Anchor at on-screen text if at all possible: CaretMode.init() scrolls the anchor into view, so
+    // anchoring at off-screen text scrolls the page out from under the user. We walk the document
+    // once, keeping the best candidate seen so far at each level of preference:
+    //   1. in the viewport, and long enough to be interesting (the common case),
+    //   2. in the viewport, however short,
+    //   3. the document-order heuristic, used only if the viewport contains no text at all.
+    // Level 2 matters: without it, a viewport full of short lines (lists, tables, code) falls
+    // through to level 3, which can be anywhere in the document.
+    let interesting = null;
+    let onScreen = null;
+    let anywhere = null;
 
-  // Returns a collapsed range at the start of a text node which looks like it's worth selecting, or
-  // null if there is none. If requireVisible is true, then only text which is rendered within the
-  // current viewport is considered.
-  findInitialAnchorRange(requireVisible) {
     let node;
     const nodes = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     while ((node = nodes.nextNode())) {
-      // Don't choose short text nodes; they're likely to be part of a banner.
-      if ((node.nodeType !== 3) || !(50 <= node.data.trim().length)) continue;
+      const text = node.data.trim();
+      if ((node.nodeType !== 3) || (text.length === 0)) continue;
       const element = node.parentElement;
       if (!element || DomUtils.isEditable(element)) continue;
 
-      // The offset of the first non-whitespace character.
+      // Start at the offset of the first non-whitespace character. A long text node can begin above
+      // the viewport and extend into it, so use the first of its characters which is on screen.
       const offset = node.data.length - node.data.replace(/^\s+/, "").length;
+      const visibleOffset = this.firstVisibleOffset(node, offset);
 
-      if (requireVisible) {
-        // A long text node can begin above the viewport and extend into it, so anchor at the first
-        // of its characters which is actually on screen.
-        const visibleOffset = this.firstVisibleOffset(node, offset);
-        if (visibleOffset == null) continue;
-        return this.collapsedRangeAt(node, visibleOffset);
+      if (visibleOffset != null) {
+        const range = this.collapsedRangeAt(node, visibleOffset);
+        // Don't choose short text nodes; they're likely to be part of a banner.
+        if (50 <= text.length) {
+          interesting = range;
+          break; // Nothing can beat this.
+        } else if (onScreen == null) {
+          onScreen = range;
+        }
+      } else if (
+        (anywhere == null) && (50 <= text.length) && DomUtils.getVisibleClientRect(element)
+      ) {
+        // NOTE(smblott). This tests the parent element, which is often a container which extends into
+        // the viewport even when this particular text has scrolled out of view. That's why it is our
+        // last resort.
+        anywhere = this.collapsedRangeAt(node, offset);
       }
-
-      // NOTE(smblott). This tests the parent element, which is often a container which extends into
-      // the viewport even when this particular text has scrolled out of view. That's why we only use
-      // it as a fallback.
-      if (DomUtils.getVisibleClientRect(element)) return this.collapsedRangeAt(node, offset);
     }
-    return null;
+
+    const range = interesting || onScreen || anywhere;
+    if (range) {
+      this.movement.setSelectionRange(range);
+      return true;
+    }
+    return false;
   }
 
   // Returns the offset of the first character of node, at or after startOffset, which is rendered
